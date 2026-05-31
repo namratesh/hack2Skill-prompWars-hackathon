@@ -1,10 +1,11 @@
+import asyncio
 import json
 import re
 import uuid
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from models.schemas import TripCreateRequest, ReplanRequest
-from agents.orchestrator import generate_itinerary, stream_itinerary, replan_itinerary
+from agents.orchestrator import generate_itinerary, replan_itinerary
 
 router = APIRouter(prefix="/api/trips", tags=["trips"])
 
@@ -131,25 +132,43 @@ async def generate_trip_stream(trip_id: str):
     trip_data = _trip_store[trip_id]
     request = _build_request(trip_data)
 
+    PROGRESS = [
+        "Analyzing destination, season and weather patterns...",
+        "Clustering neighbourhoods to minimise transit time...",
+        "Allocating budget across days...",
+        "Selecting authentic local experiences...",
+        "Honouring your must-visit places and dietary preferences...",
+        "Finalising your personalised itinerary...",
+    ]
+
     async def event_generator():
-        collected: list[str] = []
-        try:
-            async for chunk in stream_itinerary(request):
-                collected.append(chunk)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-        except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
-            return
+        # Run the reliable non-streaming LLM call in the background.
+        # stream_itinerary was dropping mid-JSON; generate_itinerary
+        # uses call_llm which retries across models and guarantees
+        # complete JSON before returning.
+        llm_task = asyncio.create_task(generate_itinerary(request))
+
+        # Emit progress ticks every ~3 s while we wait, so the browser
+        # sees a live reasoning feed instead of a blank loading screen.
+        for msg in PROGRESS:
+            if llm_task.done():
+                break
+            yield f"data: {json.dumps({'type': 'chunk', 'content': msg + '\n'})}\n\n"
+            try:
+                await asyncio.wait_for(asyncio.shield(llm_task), timeout=3.0)
+                break
+            except asyncio.TimeoutError:
+                continue
 
         try:
-            itinerary = _parse_itinerary("".join(collected))
+            itinerary = await llm_task
             itinerary["destination"] = trip_data["destination"]
             itinerary["travel_style"] = ", ".join(trip_data["travel_style"])
             _trip_store[trip_id]["itinerary"] = itinerary
             _trip_store[trip_id]["status"] = "generated"
             yield f"data: {json.dumps({'type': 'complete', 'itinerary': itinerary})}\n\n"
-        except (json.JSONDecodeError, Exception) as exc:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Could not parse itinerary: {exc}'})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
 
     return StreamingResponse(
         event_generator(),
