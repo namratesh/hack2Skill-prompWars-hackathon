@@ -113,11 +113,11 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filterSuggestions = useCallback((query: string) => {
-    return query.trim()
-      ? POPULAR_DESTINATIONS.filter((d) => d.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
-      : POPULAR_DESTINATIONS.slice(0, 6);
-  }, []);
+  const filterSuggestions = useCallback((query: string): string[] => {
+    const q = query.trim().toLowerCase();
+    if (!q) return POPULAR_DESTINATIONS.slice(0, 6);
+    return POPULAR_DESTINATIONS.filter((d) => d.toLowerCase().includes(q)).slice(0, 6);
+  }, []); // POPULAR_DESTINATIONS is module-level constant — no deps needed
 
   const handleDestinationChange = (value: string) => {
     setForm((f) => ({ ...f, destination: value }));
