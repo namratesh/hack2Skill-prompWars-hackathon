@@ -6,20 +6,20 @@ from typing import AsyncGenerator
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
-# Verified free-tier models on OpenRouter (as of 2025)
+# Free-tier models verified on OpenRouter
 MODELS = {
-    "planning": "deepseek/deepseek-chat-v3-0324:free",
-    "fast": "meta-llama/llama-3.3-70b-instruct:free",
-    "cheap": "meta-llama/llama-3.1-8b-instruct:free",
+    "planning": "deepseek/deepseek-v4-flash:free",
+    "fast": "google/gemma-4-31b-it:free",
+    "cheap": "google/gemma-4-26b-a4b-it:free",
 }
 
 # Ordered fallback chain — all verified free models
 FALLBACK_CHAIN = [
-    "deepseek/deepseek-chat-v3-0324:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-31b-it:free",
+    "moonshotai/kimi-k2.6:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "poolside/laguna-m.1:free",
 ]
 
 
