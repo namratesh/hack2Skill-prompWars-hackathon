@@ -153,7 +153,8 @@ async def generate_trip_stream(trip_id: str):
         for msg in PROGRESS:
             if llm_task.done():
                 break
-            yield f"data: {json.dumps({'type': 'chunk', 'content': msg + '\n'})}\n\n"
+            chunk_data = json.dumps({"type": "chunk", "content": msg + "\n"})
+            yield f"data: {chunk_data}\n\n"
             try:
                 await asyncio.wait_for(asyncio.shield(llm_task), timeout=3.0)
                 break
