@@ -48,6 +48,12 @@ async def generate_trip(trip_id: str):
         travel_style=trip_data["travel_style"],
         group_type=trip_data["group_type"],
         group_size=trip_data["group_size"],
+        dietary_restrictions=trip_data.get("dietary_restrictions", []),
+        pace=trip_data.get("pace", "moderate"),
+        must_visit=trip_data.get("must_visit", ""),
+        accommodation_type=trip_data.get("accommodation_type", "mid-range"),
+        special_occasion=trip_data.get("special_occasion", "none"),
+        notes=trip_data.get("notes", ""),
     )
 
     itinerary = await generate_itinerary(request)
@@ -74,24 +80,46 @@ async def generate_trip_stream(trip_id: str):
         travel_style=trip_data["travel_style"],
         group_type=trip_data["group_type"],
         group_size=trip_data["group_size"],
+        dietary_restrictions=trip_data.get("dietary_restrictions", []),
+        pace=trip_data.get("pace", "moderate"),
+        must_visit=trip_data.get("must_visit", ""),
+        accommodation_type=trip_data.get("accommodation_type", "mid-range"),
+        special_occasion=trip_data.get("special_occasion", "none"),
+        notes=trip_data.get("notes", ""),
     )
 
     async def event_generator():
         collected = []
-        async for chunk in stream_itinerary(request):
-            collected.append(chunk)
-            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+        try:
+            async for chunk in stream_itinerary(request):
+                collected.append(chunk)
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            return
 
         full_text = "".join(collected)
+
+        # Strip markdown fences the model may have added
+        import re
+        clean = full_text.strip()
+        m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", clean)
+        if m:
+            clean = m.group(1).strip()
+        elif not clean.startswith("{"):
+            idx = clean.find("{")
+            if idx != -1:
+                clean = clean[idx:]
+
         try:
-            itinerary = json.loads(full_text)
+            itinerary = json.loads(clean)
             itinerary["destination"] = trip_data["destination"]
             itinerary["travel_style"] = ", ".join(trip_data["travel_style"])
             _trip_store[trip_id]["itinerary"] = itinerary
             _trip_store[trip_id]["status"] = "generated"
             yield f"data: {json.dumps({'type': 'complete', 'itinerary': itinerary})}\n\n"
-        except json.JSONDecodeError:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Failed to parse itinerary'})}\n\n"
+        except json.JSONDecodeError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Could not parse itinerary: {exc}'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

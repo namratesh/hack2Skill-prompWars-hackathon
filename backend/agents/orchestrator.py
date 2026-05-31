@@ -35,7 +35,7 @@ async def generate_itinerary(request: TripCreateRequest) -> dict:
         system_prompt=PLANNER_SYSTEM,
         user_prompt=user_prompt,
         model_key="planning",
-        max_tokens=5000,
+        max_tokens=2500,
         json_mode=True,
     )
 
@@ -75,7 +75,7 @@ async def stream_itinerary(request: TripCreateRequest):
         system_prompt=PLANNER_SYSTEM,
         user_prompt=user_prompt,
         model_key="fast",
-        max_tokens=5000,
+        max_tokens=2500,
     ):
         yield chunk
 
@@ -108,7 +108,7 @@ async def replan_itinerary(request: ReplanRequest) -> dict:
         system_prompt=REPLAN_SYSTEM,
         user_prompt=user_prompt,
         model_key="fast",
-        max_tokens=3000,
+        max_tokens=1500,
         json_mode=True,
     )
 
