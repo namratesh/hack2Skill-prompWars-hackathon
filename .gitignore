@@ -222,3 +222,6 @@ frontend/node_modules/
 frontend/.next/
 .next/
 
+# Allow frontend/lib (overrides the generic lib/ Python rule above)
+!frontend/lib/
+
