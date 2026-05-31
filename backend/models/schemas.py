@@ -11,6 +11,13 @@ class TripCreateRequest(BaseModel):
     travel_style: list[str] = Field(default_factory=list)
     group_type: str = Field(default="solo", max_length=50)
     group_size: int = Field(default=1, ge=1, le=50)
+    # User preference enrichment
+    dietary_restrictions: list[str] = Field(default_factory=list)
+    pace: str = Field(default="moderate", max_length=20)
+    must_visit: str = Field(default="", max_length=500)
+    accommodation_type: str = Field(default="mid-range", max_length=50)
+    special_occasion: str = Field(default="none", max_length=100)
+    notes: str = Field(default="", max_length=500)
 
     @field_validator("destination")
     @classmethod

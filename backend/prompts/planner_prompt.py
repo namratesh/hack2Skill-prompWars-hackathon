@@ -17,11 +17,21 @@ Budget: ${budget_usd} USD total
 Travel Style: {travel_style}
 Group: {group_type}, {group_size} person(s)
 
+--- Traveler Preferences ---
+Pace: {pace} (slow = leisurely with long breaks; moderate = balanced; fast = maximize sights)
+Accommodation: {accommodation_type}
+Dietary Restrictions: {dietary_restrictions}
+Special Occasion: {special_occasion}
+Must-Visit / Special Requests: {must_visit}
+Additional Notes: {notes}
+---
+
 First, briefly reason about:
 1. Season/weather during these dates and how it affects planning
 2. Key neighborhood clusters to minimize transit
-3. Budget allocation strategy
+3. Budget allocation strategy respecting the accommodation preference
 4. Crowd avoidance tactics
+5. How to honor the must-visit places and dietary needs
 
 Then output a JSON itinerary with this exact structure:
 {{

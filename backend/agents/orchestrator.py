@@ -23,6 +23,12 @@ async def generate_itinerary(request: TripCreateRequest) -> dict:
         travel_style=", ".join(request.travel_style) if request.travel_style else "balanced",
         group_type=request.group_type,
         group_size=request.group_size,
+        pace=request.pace or "moderate",
+        accommodation_type=request.accommodation_type or "mid-range",
+        dietary_restrictions=", ".join(request.dietary_restrictions) if request.dietary_restrictions else "none",
+        special_occasion=request.special_occasion or "none",
+        must_visit=request.must_visit or "none specified",
+        notes=request.notes or "none",
     )
 
     raw = await call_llm(
@@ -57,6 +63,12 @@ async def stream_itinerary(request: TripCreateRequest):
         travel_style=", ".join(request.travel_style) if request.travel_style else "balanced",
         group_type=request.group_type,
         group_size=request.group_size,
+        pace=request.pace or "moderate",
+        accommodation_type=request.accommodation_type or "mid-range",
+        dietary_restrictions=", ".join(request.dietary_restrictions) if request.dietary_restrictions else "none",
+        special_occasion=request.special_occasion or "none",
+        must_visit=request.must_visit or "none specified",
+        notes=request.notes or "none",
     )
 
     async for chunk in stream_llm(

@@ -22,6 +22,12 @@ async def create_trip(request: TripCreateRequest):
         "travel_style": request.travel_style,
         "group_type": request.group_type,
         "group_size": request.group_size,
+        "dietary_restrictions": request.dietary_restrictions,
+        "pace": request.pace,
+        "must_visit": request.must_visit,
+        "accommodation_type": request.accommodation_type,
+        "special_occasion": request.special_occasion,
+        "notes": request.notes,
         "status": "created",
         "itinerary": None,
     }

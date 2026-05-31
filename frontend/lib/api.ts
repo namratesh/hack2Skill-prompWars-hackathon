@@ -1,8 +1,6 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://hack2skill-prompwars-hackathon.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-export async function createTrip(data: {
+export interface CreateTripPayload {
   destination: string;
   start_date: string;
   end_date: string;
@@ -10,13 +8,24 @@ export async function createTrip(data: {
   travel_style: string[];
   group_type: string;
   group_size: number;
-}): Promise<{ trip_id: string }> {
+  dietary_restrictions: string[];
+  pace: string;
+  must_visit: string;
+  accommodation_type: string;
+  special_occasion: string;
+  notes: string;
+}
+
+export async function createTrip(data: CreateTripPayload): Promise<{ trip_id: string }> {
   const res = await fetch(`${API_BASE}/api/trips`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to create trip");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail || `Server error ${res.status}`);
+  }
   return res.json();
 }
 
@@ -41,7 +50,7 @@ export function streamTripGeneration(
     signal: controller.signal,
   })
     .then(async (res) => {
-      if (!res.ok) throw new Error("Stream failed");
+      if (!res.ok) throw new Error(`Stream failed: ${res.status}`);
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -51,7 +60,7 @@ export function streamTripGeneration(
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
@@ -60,7 +69,9 @@ export function streamTripGeneration(
               if (event.type === "chunk") onChunk(event.content);
               if (event.type === "complete") onComplete(event.itinerary);
               if (event.type === "error") onError(event.message);
-            } catch {}
+            } catch {
+              // ignore malformed SSE lines
+            }
           }
         }
       }
