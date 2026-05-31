@@ -1,21 +1,42 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import date
 
 
 class TripCreateRequest(BaseModel):
-    destination: str
+    destination: str = Field(..., min_length=2, max_length=200)
     start_date: date
     end_date: date
-    budget_usd: float
+    budget_usd: float = Field(..., gt=0, le=100_000)
     travel_style: list[str] = Field(default_factory=list)
-    group_type: str = "solo"
-    group_size: int = 1
+    group_type: str = Field(default="solo", max_length=50)
+    group_size: int = Field(default=1, ge=1, le=50)
+
+    @field_validator("destination")
+    @classmethod
+    def destination_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Destination cannot be blank")
+        return v.strip()
+
+    @field_validator("end_date")
+    @classmethod
+    def end_after_start(cls, end: date, info) -> date:
+        start = info.data.get("start_date")
+        if start and end < start:
+            raise ValueError("end_date must be on or after start_date")
+        return end
+
+    @field_validator("travel_style")
+    @classmethod
+    def sanitize_styles(cls, styles: list[str]) -> list[str]:
+        allowed = {"culture", "food", "adventure", "relaxation", "nightlife", "nature", "shopping", "history"}
+        return [s for s in styles if s in allowed]
 
 
 class ReplanRequest(BaseModel):
-    trigger: str  # "weather" | "strike" | "closure" | "manual"
-    reason: str
+    trigger: str = Field(..., max_length=50)
+    reason: str = Field(..., max_length=500)
     affected_days: list[int] = Field(default_factory=list)
     current_itinerary: dict
 
