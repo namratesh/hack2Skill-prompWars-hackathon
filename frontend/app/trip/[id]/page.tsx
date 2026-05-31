@@ -30,6 +30,7 @@ export default function TripPage() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [reasoning, setReasoning] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [replanning, setReplanning] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [activeDay, setActiveDay] = useState(1);
@@ -51,6 +52,7 @@ export default function TripPage() {
       },
       (err) => {
         console.error(err);
+        setLoadError(err || "Failed to generate itinerary. Please try again.");
         setLoading(false);
       }
     );
@@ -160,8 +162,23 @@ export default function TripPage() {
           </div>
         )}
 
+        {/* Error State */}
+        {!loading && loadError && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="mb-4 text-5xl">⚠️</div>
+            <h2 className="mb-2 text-xl font-semibold text-white">Could not generate itinerary</h2>
+            <p className="mb-6 text-sm text-neutral-400 max-w-md">{loadError}</p>
+            <Link
+              href="/"
+              className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
+            >
+              ← Back to planner
+            </Link>
+          </div>
+        )}
+
         {/* Itinerary View */}
-        {!loading && itinerary && (
+        {!loading && !loadError && itinerary && (
           <div className="space-y-8">
             {/* Overview */}
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6">

@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://hack2skill-prompwars-hackathon.onrender.com";
 
 export async function createTrip(data: {
   destination: string;
