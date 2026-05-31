@@ -54,7 +54,7 @@ async def generate_itinerary(request: TripCreateRequest) -> dict:
         system_prompt=PLANNER_SYSTEM,
         user_prompt=user_prompt,
         model_key="planning",
-        max_tokens=2500,
+        max_tokens=3500,
         json_mode=True,
     )
     weather, raw = await asyncio.gather(weather_task, llm_task)
@@ -72,7 +72,7 @@ async def stream_itinerary(request: TripCreateRequest) -> AsyncGenerator[str, No
         system_prompt=PLANNER_SYSTEM,
         user_prompt=user_prompt,
         model_key="fast",
-        max_tokens=2500,
+        max_tokens=3500,
     ):
         yield chunk
 

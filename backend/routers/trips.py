@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -8,6 +9,80 @@ from agents.orchestrator import generate_itinerary, stream_itinerary, replan_iti
 router = APIRouter(prefix="/api/trips", tags=["trips"])
 
 _trip_store: dict[str, dict] = {}
+
+
+def _clean_json(text: str) -> str:
+    """Strip markdown fences and locate the JSON object in raw LLM output."""
+    text = text.strip()
+    m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
+    if m:
+        return m.group(1).strip()
+    idx = text.find("{")
+    return text[idx:] if idx != -1 else text
+
+
+def _repair_json(text: str) -> str:
+    """
+    Best-effort repair of truncated JSON by closing any open
+    strings, arrays, and objects in reverse stack order.
+    Only used when json.loads() fails on the first attempt.
+    """
+    in_string = False
+    escape_next = False
+    stack: list[str] = []
+
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if not in_string:
+            if ch in ("{", "["):
+                stack.append(ch)
+            elif ch == "}" and stack and stack[-1] == "{":
+                stack.pop()
+            elif ch == "]" and stack and stack[-1] == "[":
+                stack.pop()
+
+    # Close an unterminated string first
+    if in_string:
+        text += '"'
+    # Close open containers in reverse order
+    for bracket in reversed(stack):
+        text += "}" if bracket == "{" else "]"
+    return text
+
+
+def _parse_itinerary(raw: str) -> dict:
+    """Parse LLM output to JSON, repairing truncation if needed."""
+    clean = _clean_json(raw)
+    try:
+        return json.loads(clean)
+    except json.JSONDecodeError:
+        return json.loads(_repair_json(clean))
+
+
+def _build_request(trip_data: dict) -> TripCreateRequest:
+    return TripCreateRequest(
+        destination=trip_data["destination"],
+        start_date=trip_data["start_date"],
+        end_date=trip_data["end_date"],
+        budget_usd=trip_data["budget_usd"],
+        travel_style=trip_data["travel_style"],
+        group_type=trip_data["group_type"],
+        group_size=trip_data["group_size"],
+        dietary_restrictions=trip_data.get("dietary_restrictions", []),
+        pace=trip_data.get("pace", "moderate"),
+        must_visit=trip_data.get("must_visit", ""),
+        accommodation_type=trip_data.get("accommodation_type", "mid-range"),
+        special_occasion=trip_data.get("special_occasion", "none"),
+        notes=trip_data.get("notes", ""),
+    )
 
 
 @router.post("")
@@ -40,29 +115,11 @@ async def generate_trip(trip_id: str):
         raise HTTPException(status_code=404, detail="Trip not found")
 
     trip_data = _trip_store[trip_id]
-    request = TripCreateRequest(
-        destination=trip_data["destination"],
-        start_date=trip_data["start_date"],
-        end_date=trip_data["end_date"],
-        budget_usd=trip_data["budget_usd"],
-        travel_style=trip_data["travel_style"],
-        group_type=trip_data["group_type"],
-        group_size=trip_data["group_size"],
-        dietary_restrictions=trip_data.get("dietary_restrictions", []),
-        pace=trip_data.get("pace", "moderate"),
-        must_visit=trip_data.get("must_visit", ""),
-        accommodation_type=trip_data.get("accommodation_type", "mid-range"),
-        special_occasion=trip_data.get("special_occasion", "none"),
-        notes=trip_data.get("notes", ""),
-    )
-
-    itinerary = await generate_itinerary(request)
+    itinerary = await generate_itinerary(_build_request(trip_data))
     itinerary["destination"] = trip_data["destination"]
     itinerary["travel_style"] = ", ".join(trip_data["travel_style"])
-
     _trip_store[trip_id]["itinerary"] = itinerary
     _trip_store[trip_id]["status"] = "generated"
-
     return {"trip_id": trip_id, "itinerary": itinerary}
 
 
@@ -72,24 +129,10 @@ async def generate_trip_stream(trip_id: str):
         raise HTTPException(status_code=404, detail="Trip not found")
 
     trip_data = _trip_store[trip_id]
-    request = TripCreateRequest(
-        destination=trip_data["destination"],
-        start_date=trip_data["start_date"],
-        end_date=trip_data["end_date"],
-        budget_usd=trip_data["budget_usd"],
-        travel_style=trip_data["travel_style"],
-        group_type=trip_data["group_type"],
-        group_size=trip_data["group_size"],
-        dietary_restrictions=trip_data.get("dietary_restrictions", []),
-        pace=trip_data.get("pace", "moderate"),
-        must_visit=trip_data.get("must_visit", ""),
-        accommodation_type=trip_data.get("accommodation_type", "mid-range"),
-        special_occasion=trip_data.get("special_occasion", "none"),
-        notes=trip_data.get("notes", ""),
-    )
+    request = _build_request(trip_data)
 
     async def event_generator():
-        collected = []
+        collected: list[str] = []
         try:
             async for chunk in stream_itinerary(request):
                 collected.append(chunk)
@@ -98,27 +141,14 @@ async def generate_trip_stream(trip_id: str):
             yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
             return
 
-        full_text = "".join(collected)
-
-        # Strip markdown fences the model may have added
-        import re
-        clean = full_text.strip()
-        m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", clean)
-        if m:
-            clean = m.group(1).strip()
-        elif not clean.startswith("{"):
-            idx = clean.find("{")
-            if idx != -1:
-                clean = clean[idx:]
-
         try:
-            itinerary = json.loads(clean)
+            itinerary = _parse_itinerary("".join(collected))
             itinerary["destination"] = trip_data["destination"]
             itinerary["travel_style"] = ", ".join(trip_data["travel_style"])
             _trip_store[trip_id]["itinerary"] = itinerary
             _trip_store[trip_id]["status"] = "generated"
             yield f"data: {json.dumps({'type': 'complete', 'itinerary': itinerary})}\n\n"
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, Exception) as exc:
             yield f"data: {json.dumps({'type': 'error', 'message': f'Could not parse itinerary: {exc}'})}\n\n"
 
     return StreamingResponse(
@@ -163,10 +193,7 @@ async def replan_trip(trip_id: str, request: ReplanRequest):
         "affected_day_numbers": request.affected_days,
         "resolved": False,
     }
-
-    if "alerts" not in trip_data:
-        trip_data["alerts"] = []
-    trip_data["alerts"].append(alert)
+    trip_data.setdefault("alerts", []).append(alert)
 
     return {
         "trip_id": trip_id,
